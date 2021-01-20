@@ -1,6 +1,11 @@
-//
-// Created by terez on 1/13/2021.
-//
+/*
+ *
+ *  Semestralni prace z predmetu UPS
+ *  Autor: Tereza Tothova
+ *  Datum: 10. 12. 2020
+
+ *
+ */
 
 #ifndef SP1_GAME_H
 #define SP1_GAME_H
@@ -29,7 +34,7 @@ typedef struct Game {
 } Game;
 
 
-Game *create_games(int countGames, int countPlayers);
+Game *create_games(int count_games, int count_players);
 int add_player(Game *game,  Client *client, int players_in_game);
 Game *get_game(Game *games, int count, int id_game);
 

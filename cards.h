@@ -1,6 +1,11 @@
-//
-// Created by terez on 1/16/2021.
-//
+/*
+ *
+ *  Semestralni prace z predmetu UPS
+ *  Autor: Tereza Tothova
+ *  Datum: 10. 12. 2020
+
+ *
+ */
 
 #ifndef SP1_CARDS_H
 #define SP1_CARDS_H

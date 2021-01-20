@@ -1,6 +1,10 @@
-//
-// Created by terez on 1/15/2021.
-//
+/*
+ *
+ *  Semestralni prace z predmetu UPS
+ *  Autor: Tereza Tothova
+ *  Datum: 10. 12. 2020
+ *
+ */
 
 #ifndef SP1_MESSAGE_IN_H
 #define SP1_MESSAGE_IN_H
@@ -14,13 +18,10 @@
 
 
 // Prefixy
-#define TMP_PREFIX 'T'
 
-#define LOGIN_PREFIX 'I'    //message from login screen
-
-#define GAME_PREFIX 'G'     //message from game screen
-#define LOBBY_PREFIX 'L'    //message from lobby screen
-
+#define LOGIN_PREFIX 'I'    // message from login screen
+#define GAME_PREFIX 'G'     // message from game screen
+#define LOBBY_PREFIX 'L'    // message from lobby screen
 #define ERROR_PREFIX 'E'    //error message
 
 typedef struct Message_in {

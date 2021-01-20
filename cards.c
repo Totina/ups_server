@@ -1,6 +1,13 @@
-//
-// Created by terez on 1/16/2021.
-//
+/*
+ *
+ *  Semestralni prace z predmetu UPS
+ *  Autor: Tereza Tothova
+ *  Datum: 10. 12. 2020
+ *  Modul cards.c
+ *
+ *
+ *
+ */
 
 #include <stdio.h>
 #include "string.h"
@@ -10,13 +17,14 @@
 #include "cards.h"
 
 /**
- * Funkce, naplní balíček kartami.
+ * Naplní balíček kartami
  *
- * @return nový naplněný balíček kartami - Card *
+ * @return nový balíček naplněný kartami - Card *
  */
 Card *prepare_cards(){
     Card *cards = (Card*)malloc(NUMBER_OF_CARDS * sizeof(Card));
 
+    printf("preparing cards\n");
     // pattern
     for(int i = 0; i < 32; i++) {
         if(i < 8) {
@@ -88,15 +96,16 @@ Card *prepare_cards(){
         cards[r] = tmp;
     }
     //free(&tmp);
+    printf("card prepared");
 
     return cards;
 }
 
 
 /**
- * Vypíše informaci o kartach
+ * Vypíše informaci o kartách
  *
- * @param list_of_games  List místnotí
+ * @param cards karty
  */
 void print_cards(Card *cards) {
 

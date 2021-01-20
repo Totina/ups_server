@@ -1,26 +1,34 @@
-//
-// Created by terez on 1/13/2021.
-//
+/*
+ *
+ *  Semestralni prace z predmetu UPS
+ *  Autor: Tereza Tothova
+ *  Datum: 10. 12. 2020
+ *  Modul game.c
+ *
+ *
+ *
+ */
 
 #include "game.h"
 
 /**
- * Inicilaizuje list místností a naplní ho určeným počtem místností z parametru countGames.
+ * Inicilaizuje pole místností a naplní ho daným počtem místností a ty potom daným množstvím hráčů.
 
- * @param countGames počet her
+ * @param count_games počet her
+ * @param count_players počet hráčů ve hře
  *
- * @return lsit napněn místsnosti (struktura game_room)
+ * @return pole místností
  */
-Game *create_games(int countGames, int countPlayers) {
-    Game *games = (Game*)malloc(countGames * sizeof(Game));
+Game *create_games(int count_games, int count_players) {
+    Game *games = (Game*)malloc(count_games * sizeof(Game));
 
-    for(int i = 0; i < countGames; i++) {
+    for(int i = 0; i < count_games; i++) {
         games[i].id_game = i;
         games[i].state = GAME_STATE_NONE;
         games[i].number_of_players = 0;
 
         // malloc clients
-        Client **players = (Client**)malloc(countPlayers * sizeof(Client*));
+        Client **players = (Client**)malloc(count_players * sizeof(Client*));
         games[i].list_of_players = players;
 
         // malloc cards
@@ -34,14 +42,13 @@ Game *create_games(int countGames, int countPlayers) {
 }
 
 /**
- * Přidá klienta do místnosti.
+ * Přidá klienta do hry
  *
- * @param id_room id hry/místnoti
- * @param list_of_games lsit všech místnotí
- * @param client kleint, který se rád přidal do hry
- * @param list_of_clients lsit všech klientů
+ * @param game hra
+ * @param client klient
+ * @param players_in_game počet hráčů ve hře
  *
- * @return EXIT_SUCCESS neb o EXIT_FAILURE
+ * @return EXIT_SUCCESS nebo EXIT_FAILURE
  */
 int add_player(Game *game,  Client *client, int players_in_game) {
     char server_message[MAX_LENGTH_MESSAGE];
@@ -86,9 +93,10 @@ int add_player(Game *game,  Client *client, int players_in_game) {
 /**
 * Vrátí místnost podle id.
 *
-* @param games List všech her/místností
-* @param id_game id hry/místnosti
-* @return Struktura hry/místnosti (Game_room_s)
+* @param games List her
+* @param count Počet místností
+* @param id_game id hry
+* @return Struktura Game
 */
 Game *get_game(Game *games, int count, int id_game) {
 
@@ -102,9 +110,10 @@ Game *get_game(Game *games, int count, int id_game) {
 
 
 /**
- * Vypíše informaci o každé místnosti na obrazovku
+ * Vypíše informaci o každé místnosti v poli
  *
- * @param list_of_games  List místnotí
+ * @param games pole her
+ * @param count počet her
  */
 void print_games(Game *games, int count) {
 
@@ -116,11 +125,11 @@ void print_games(Game *games, int count) {
 }
 
 /**
- * Vytiskne informaci o hře na obrazovku
+ * Vypíše informaci o hře
  *
- * @param game Game_room_s hra o které chceme vypsat info
+ * @param game hra
  */
-static void print_game(Game *game) {
+void print_game(Game *game) {
     if (game) {
         printf("GameID: %d, state: %d, number of current players: %d", game->id_game, game->state, game->number_of_players);
 
@@ -137,12 +146,12 @@ static void print_game(Game *game) {
 }
 
 /**
- * Pošle informaci o stavu místnosti danému klientovi se sock_id parametrem.
- * Metoda posílá zprávu ve tvaru: PREFIX+ODDELOVAC+INFO+ODDELOVAC+ID HRY+ODDELOVAC+STAV HRY+ODDELOVAC+POCET HRACU VE HRE+UKONCOVACi ZNAK
+ * Pošle informaci o stavu místnosti klientovi
  *
- * @param sock_id Sock id klienta
- * @param list_of_games  List všech her/místnosté
- * @param id_game  id hry/místnosti o které chci poslat informaci
+ * @param sock_id Sock_id klienta
+ * @param list_of_games  pole místností
+ * @param id_game  id hry
+ * @param počet her
  */
 void send_game_info(int sock_id, Game **list_of_games, int game_id, int count) {
     char server_message[MAX_LENGTH_MESSAGE];

@@ -1,6 +1,13 @@
-//
-// Created by terez on 1/16/2021.
-//
+/*
+ *
+ *  Semestralni prace z predmetu UPS
+ *  Autor: Tereza Tothova
+ *  Datum: 10. 12. 2020
+ *  Modul game_manager.c
+ *
+ *
+ *
+ */
 
 #include <stdlib.h>
 #include <string.h>
@@ -12,12 +19,13 @@
 #include "cards.h"
 
 /**
- * Funkce inicializuje stav hry/místnosti a pošle zprávu klientovi, který vstoupil do hry
+ * Inicializuje stav hry
  *
- * @param Game - místnoti/hry
+ * @param Game hra
  * @param client první klient ve hře
- * @param list_of_clients list všech klientů připojených do hry
- * @return EXIT_SUCCESS pokud sepdoaří inicializovat hru, naopak EXIT_FAILURE
+ * @param players_in_game počet hráčů
+ *
+ * @return EXIT_SUCCESS nebo EXIT_FAILURE
  */
 int prepare_game(Game *game, Client *client, int players_in_game) {
     char server_message[MAX_LENGTH_MESSAGE];
@@ -33,6 +41,7 @@ int prepare_game(Game *game, Client *client, int players_in_game) {
             // add player to game
             add_player(game, client, players_in_game);
 
+            printf("preparing game\n");
             return EXIT_SUCCESS;
 
         } else {
@@ -46,39 +55,53 @@ int prepare_game(Game *game, Client *client, int players_in_game) {
 }
 
 /**
- * Funkce, která odstrtuje hru.
- *  1) rozdají se karty hráčům
- *  2) hráčům je poslaná zpráva že můžou hrát - START_GAME
+ * Start hry
  *
- * @param client - jend áse o klienta, kter ýje do hry přidán jako poslední
- * @param list_of_clients list všech klientů na serveru
- * @param mutex mutex pro zamknutí bloku
+ * @param game - hra
+ * @param players_in_game počet hráčů ve hře
+ * @param mutex mutex
  */
 void start_game(Game *game, int players_in_game, pthread_mutex_t mutex) {
     char server_message[MAX_LENGTH_MESSAGE];
     memset(server_message, 0, MAX_LENGTH_MESSAGE);
 
     if (game && players_in_game == game->number_of_players) {
-        //pthread_mutex_lock(&mutex);
+
         // change state to running
         game->state = GAME_STATE_IN_GAME;
 
-        // prepare cards
-        game->cards = prepare_cards();
+        printf("starting game");
 
+        // prepare cards
+        //pthread_mutex_lock(&mutex);
+        game->cards = prepare_cards();
+        //pthread_mutex_unlock(&mutex);
 
         // message
         snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s%c", GAME_PREFIX, "game_started", END_CHAR);
 
+        //pthread_mutex_lock(&mutex);
         // set client states to IN GAME, send message the game started
         for(int i = 0; i < game->number_of_players; i++) {
             game->list_of_players[i]->state = CLIENT_STATE_IN_GAME;
             send_message_to_client(game->list_of_players[i]->sock_id, server_message);
         }
+
+        for(int i = 0; i < game->number_of_players; i++) {
+
+            for(int j = 0; j < game->number_of_players; j++) {
+                snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %s%c", GAME_PREFIX, "player",
+                         game->list_of_players[j]->name, END_CHAR);
+                send_message_to_client(game->list_of_players[i]->sock_id, server_message);
+            }
+        }
+
         //pthread_mutex_unlock(&mutex);
 
         // deal cards
+        //pthread_mutex_lock(&mutex);
         deal_starting_cards(game);
+        //pthread_mutex_unlock(&mutex);
 
         memset(server_message, 0, MAX_LENGTH_MESSAGE);
     } else {
@@ -177,8 +200,9 @@ int gimme_card(Game * game, Client *client) {
 /**
  * Zkontroluje, zda žádný hráč ve hře již nechce další kartu.
  *
+ * @param game hra
  * @return  0 nekdo chce harty, hra bude pokracovat
- *          1 nikdo neche dalsi karty, hra se ukonci
+ *          1 nikdo nechce dalsi karty, hra se ukonci
  */
 int no_more_cards_requested(Game *game) {
     for(int i = 0; i < game->number_of_players; i++) {
@@ -190,11 +214,15 @@ int no_more_cards_requested(Game *game) {
 }
 
 /**
-*
+* Ukončení hry a rozhodnutí o výherci.
+ *
+ * @param game hra
 */
 void game_finished(Game *game) {
     char server_message[MAX_LENGTH_MESSAGE];
     memset(server_message, 0, MAX_LENGTH_MESSAGE);
+
+    game->state = GAME_STATE_FINISHED;
 
     // winner
     int best_points = 0;
@@ -263,28 +291,74 @@ void game_finished(Game *game) {
 }
 
 /**
- * Funkce, která ošetří odchod hráče ze hry.
- * Dělí se na dva stavy:
- *  1) odchod z probíhající hry -> konec hry
- *  2) odchoz ze hry čekající na dalšího hráče
+ * Odchod hráče ze hry
  *
- * @param client odcházející hráč
- * @param list_of_clients lsit všech klientů
- * @param list_of_games list všech her
+ *
+ * @param client hráč
+ * @param game hra
+ * @param players_in_game počet hráčů ve hře
  */
-void client_left_the_game(Client *client, Game * game, Client_list *list_of_clients, Game *list_of_games, int players_in_game) {
+void client_left_the_game(Client *client, Game * game, int players_in_game) {
+    char server_message[MAX_LENGTH_MESSAGE];
+    memset(server_message, 0, MAX_LENGTH_MESSAGE);
 
-    if (client && list_of_clients && list_of_games) {
-        if (client->state == CLIENT_STATE_IN_GAME) {
-            //HRA BEZI A KLIENT ODCHAZI
-            // resetovani hry pro novou hru - pro nove hrace
-            if(players_in_game < 3) {
-                end_game(client, game, list_of_clients);
+    if (client && game) {
+
+        // message - player left
+        snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %s%c", GAME_PREFIX, "player_left", client->name, END_CHAR);
+
+        if(game->state == GAME_STATE_FINISHED) {
+            printf("Player left after the game was finished\n");
+
+            client->state = CLIENT_STATE_LOBBY;
+            client->wants_another_card = 0;
+            client->number_of_cards_in_hand = 0;
+            client->game_id = -1;
+
+        }
+        else if(game->state == GAME_STATE_IN_GAME || game->state == GAME_STATE_FULL) {
+            printf("Player left while in game.\n");
+
+            // send message to all other players that player left the game
+            for (int i = 0; i < game->number_of_players; i++) {
+                if (game->list_of_players[i]->sock_id != client->sock_id) {
+                    send_message_to_client(game->list_of_players[i]->sock_id, server_message);
+                }
             }
 
+            // 1 or 2 players
+            if(players_in_game < 3) {
+                end_game(game);
+            }
+            else {
+                // more than 2 players can continue playing
+                client->state = CLIENT_STATE_LOBBY;
 
-        } else if (client->state == CLIENT_STATE_WAITING) {
-            //HRA BYLA INICIALIZOVANA, CEKA SE NA HRACE A KLIENT ODESEL
+                for (int i = 0; i < game->number_of_players; i++) {
+                    if (game->list_of_players[i]->name == client->name) {
+                        game->list_of_players[i] = NULL;
+
+                        for(int j = 0; j < game->number_of_players - i - 1; j++) {
+                            if(game->list_of_players[i+1]) {
+                                game->list_of_players[i] = game->list_of_players[i+1];
+                            }
+                        }
+                    }
+                }
+
+            }
+
+        }
+        else if(game->state == GAME_STATE_WAITING) {
+            printf("Player left the game waiting for players.\n");
+
+            // send message to all other players that player left the game
+            for (int i = 0; i < game->number_of_players; i++) {
+                if (game->list_of_players[i]->sock_id != client->sock_id) {
+                    send_message_to_client(game->list_of_players[i]->sock_id, server_message);
+                }
+            }
+
             client->state = CLIENT_STATE_LOBBY;
 
             for (int i = 0; i < game->number_of_players; i++) {
@@ -299,23 +373,30 @@ void client_left_the_game(Client *client, Game * game, Client_list *list_of_clie
                 }
             }
 
+            game->number_of_players--;
+
         }
 
+
     } else {
-        printf("Parameters are NULL - (void client_leave_from_game(Client_s *client, LinkedList_clients_s *list_of_clients, LinkedList_game_rooms_s *list_of_games))\n");
+        printf("Error in client left the game. Wrong parameters \n");
     }
 
 }
 
 /**
- * Funkce, která ukončí a znova inicizalizuje hru. Aby do hry mohl přijít jiní hráči
+ * Ukončí a znova inicizalizuje hru pro další použití.
  *
- * @param client Klient ze hry
+ * @param client hráč
  * @param list_of_all_clients lsit všech klientu na serveru
  */
-void end_game(Client *client, Game * game, Client_list *list_of_all_clients) {
-    //nastavit klientum novy stav a hru na NULL
+void end_game(Game *game) {
+    char server_message[MAX_LENGTH_MESSAGE];
+    memset(server_message, 0, MAX_LENGTH_MESSAGE);
 
+    printf("ending the game\n");
+
+    // clients
     for (int i = 0; i < game->number_of_players; i++) {
         if (game->list_of_players[i]->state != CLIENT_STATE_DISCONNECTED) {
             game->list_of_players[i]->state = CLIENT_STATE_LOBBY;
@@ -326,8 +407,6 @@ void end_game(Client *client, Game * game, Client_list *list_of_all_clients) {
         }
     }
 
-    printf("ending the game \n");
-
     free(game->cards);
     //free_cards();
 
@@ -336,5 +415,7 @@ void end_game(Client *client, Game * game, Client_list *list_of_all_clients) {
     game->state = GAME_STATE_WAITING;
 
     //free_just_client_in_list(client->my_game->list_of_players);
+
+    printf("game ended \n");
 
 }

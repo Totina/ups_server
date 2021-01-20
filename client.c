@@ -1,6 +1,13 @@
-//
-// Created by terez on 1/12/2021.
-//
+/*
+ *
+ *  Semestralni prace z predmetu UPS
+ *  Autor: Tereza Tothova
+ *  Datum: 10. 12. 2020
+ *  Modul client.c
+ *
+ *
+ *
+ */
 
 #include<unistd.h>
 
@@ -28,7 +35,7 @@ Client_list *create_client_list() {
 }
 
 /***
- *  Vytvoří strukturu klienta.
+ * Vytvoří strukturu klienta.
  *
  * @param name Jméno klienta
  * @param ip ip adresa klienta
@@ -69,8 +76,8 @@ Client *create_client(char name[20], char ip[20], int sock_id) {
 /***
  * Přidá klienta do listu.
  *
- * @param list List, do kterého chci přidat strukturu klienta
- * @param client struktura klienta, kterého chci přidat do listu
+ * @param list List klientů
+ * @param client klient
  *
  * @return EXIT_SUCCESS nebo EXIT_FAILURE
  */
@@ -91,15 +98,15 @@ int add_client(Client_list *list, Client *client) {
 }
 
 /**
- * Vytiskne informace o klientovi do konzole
+ * Vypíše informace o klientovi
  *
- * @param client Struktura klienta, kterou chceme vytisknout
+ * @param client klient
  */
 void print_client(Client *client) {
     if (client) {
         printf("	%s", client->name);
         printf("(ip: %s) ", client->client_ip);
-        printf("(id: %d) ", client->game_id);
+        printf("(game_id: %d) ", client->game_id);
         printf("(state: %d)\n", client->state);
     } else {
         printf("Error printing client)\n");
@@ -107,7 +114,7 @@ void print_client(Client *client) {
 }
 
 /**
- * Vytiskne na obrazovku informace o každém klientovi v listu.
+ * Vypíše informace o všech klientech v listu
  *
  * @param list List, který chceme vypsat
  */
@@ -125,9 +132,9 @@ void print_client_list(Client_list *list) {
 }
 
 /**
- * Metoda vrátí referenci na klienta v listu podle jména.
+ * Vrátí referenci na klienta v listu podle jména.
  *
- * @param list List klientů, ve kterém hledáme daného klienta podle jména
+ * @param list List klientů
  * @param name Jméno klienta
  *
  * @return Vrácíme nalezeného klienta a nebo NULL
@@ -154,14 +161,13 @@ Client *get_client_by_name(struct Client_list *list, char name[20]) {
 }
 
 /**
- *  Metoda, která zvaliduje jméno klienta.
- *  Pokud už dané jméno existuje, tak metoda pošle zprávu klientovi, že jméno je použito, jinak pošle že akceptováno.
- *  Pokud nastaane jiná chyba, např, delší jméno nebo krátký, tak metoda vrátí EXIT_FAILURE.
+ *  Nastaví jméno klienta
  *
  * @param list_of_clients List všech klientů připojených an server
- * @param client daný klient který se chce připojit
+ * @param client klient
  * @param message zpráva která přišla, obsahující jméno s prefixe LOGIN
- * @return 0  = added, 1 = jméno je použito  nebo EXIT_FAILURE
+ *
+ * @return EXIT_SUCCESS nebo EXIT_FAILURE
  */
 int set_name(Client_list *list_of_clients, Client *client, Message_in *message) {
     char server_message[MAX_LENGTH_MESSAGE];
@@ -212,9 +218,58 @@ int set_name(Client_list *list_of_clients, Client *client, Message_in *message) 
 }
 
 /**
- * Umožňuje poslat klientovy s daným soket id zprávu.
+ * Odstraní klienta z linked listu.
  *
- * @param sock_id  soket id klienta
+ * @param list List klientů
+ * @param client klient
+ *
+ * @return  EXIT_FAILURE nebo EXIT_SUCCESS
+ */
+int remove_client(Client_list *list, Client *client) {
+
+    if(client && list) {
+
+        printf("Deleting client");
+
+        // first in the list
+        if(client == list->first) {
+            if(client->next != NULL) {
+                list->first = client->next;
+            }
+            else {
+                list->first = NULL;
+            }
+        }
+
+        // last in the list
+        if(client == list->last) {
+            if(client->previous != NULL) {
+                list->last = client->previous;
+            }
+            else {
+                list->last = NULL;
+            }
+        }
+
+        if(client->next != NULL && client->previous != NULL)  {
+            client->previous->next = client->next;
+            client->next->previous = client->previous;
+        }
+
+        free(client);
+        list->size--;
+
+        return EXIT_SUCCESS;
+    }
+
+    printf("Error deleting client\n");
+    return EXIT_FAILURE;
+}
+
+/**
+ * Umožňuje poslat klientovy s daným sosket_id zprávu.
+ *
+ * @param sock_id  socket id klienta
  * @param message  zpráva
  */
 void send_message_to_client(int sock_id, char *message) {

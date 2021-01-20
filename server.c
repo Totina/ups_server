@@ -23,9 +23,9 @@
 #include <signal.h>
 #include <ctype.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 #include "client.h"
-#include "header.h"
 #include "game.h"
 #include "message_in.h"
 #include "game_manager.h"
@@ -45,10 +45,16 @@ Game * list_of_games;
 // mutex
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
+// file
+FILE *fp;
+
 // funkce
 void *serve_request(void *new_client);
 void print_server();
-void leave_the_game(Client *client, Game *game);
+void leave_the_game(Client *client);
+int isANumber(char *input);
+void kickOut(Client *client);
+void arg_info();
 
 int main(int argc, char *argv[]){
 
@@ -71,10 +77,14 @@ int main(int argc, char *argv[]){
     int client_socket;
     int return_value;
 
-    // accept connection stuff
+    // socket
     int *th_socket;
     socklen_t	remote_addr_len;        // socklen_t = type definition for length and size values used by socket related parameters, platform independant
     pthread_t thread_id;
+
+    // log file
+    fp  = fopen ("data.log", "a+");
+    fprintf(fp, "Server started\n");
 
 	// arguments
 	if(argc == 1) {     // no arguments, default settings
@@ -83,9 +93,16 @@ int main(int argc, char *argv[]){
         printf("Port set to %d\n", port);
         printf("Number of games set to %d\n", number_of_games);
         printf("Number of players set to %d\n", number_of_games);
+
+        fprintf(fp, "IP is not set.\n");
+        fprintf(fp,"Port set to %d\n", port);
+        fprintf(fp,"Number of games set to %d\n", number_of_games);
+        fprintf(fp,"Number of players set to %d\n", number_of_games);
+
     }
 	else if(argc % 2 == 0) {        // even number of arguments
         printf("Error: Wrong number of parameters\n");
+        fprintf(fp, "ERROR: Wrong number of parameters\n");
         return EXIT_FAILURE;
     }
 	else {                          // odd number of arguments
@@ -93,37 +110,58 @@ int main(int argc, char *argv[]){
             if(strcmp(argv[i], "-address") == 0 || strcmp(argv[i], "-a") == 0) {
                 my_addr.sin_addr.s_addr = inet_addr(argv[i+1]);
                 printf("Address set to %s\n", argv[i+1]);
+                fprintf(fp, "Address set to %s\n", argv[i+1]);
             }
             else if(strcmp(argv[i], "-port") == 0 || strcmp(argv[i], "-p") == 0) {
-                my_addr.sin_port = htons(atoi(argv[i+1]));
-                printf("Port set to %d\n", atoi(argv[i+1]));
-            }
-            else if(strcmp(argv[i], "-games") == 0 || strcmp(argv[i], "-g") == 0) {
-                int tmp = atoi(argv[i+1]);
-                if(tmp > MAX_GAMES) {
-                    number_of_games = MAX_GAMES;
-                    printf("Max number of games is %d\n", MAX_GAMES);
-                    printf("Number of games set to %d\n", MAX_GAMES);
+
+                if(isANumber(argv[i+1]) == 0) {
+                    int tmp = atoi(argv[i+1]);
+
+                    if(tmp > 1024 && tmp < 49151 ) {
+                        my_addr.sin_port = htons(tmp);
+                        printf("Port set to %d\n", tmp);
+                        fprintf(fp, "Port set to %d\n", tmp);
+                    }
                 }
                 else {
-                    number_of_games = atoi(argv[i+1]);
-                    printf("Number of games set to %d\n", atoi(argv[i+1]));
+                    printf("Incorrect port. Port set to %d\n", port);
+                }
+            }
+            else if(strcmp(argv[i], "-games") == 0 || strcmp(argv[i], "-g") == 0) {
+
+                if(isANumber(argv[i+1]) == 0) {
+                    int tmp = atoi(argv[i+1]);
+                    if(tmp < MAX_GAMES) {
+                        number_of_games = tmp;
+                        printf("Number of games set to %d\n", tmp);
+                        fprintf(fp, "Number of games set to %d\n", tmp);
+                    }
+                }
+                else {
+                    printf("Incorrect number of games\n");
+                    printf("Number of games set to %d\n", number_of_games);
+                    fprintf(fp, "Number of games set to %d\n", number_of_games);
                 }
             }
             else if(strcmp(argv[i], "-players") == 0 || strcmp(argv[i], "-pl") == 0) {
-                int tmp = atoi(argv[i+1]);
-                if(tmp > MAX_PLAYERS) {
-                    max_players_in_game = MAX_PLAYERS;
-                    printf("Max number of players is %d\n", MAX_PLAYERS);
-                    printf("Number of players set to %d\n", MAX_PLAYERS);
+
+                if(isANumber(argv[i+1]) == 0) {
+                    int tmp = atoi(argv[i+1]);
+                    if(tmp < MAX_PLAYERS) {
+                        max_players_in_game = tmp;
+                        printf("Number of players set to %d\n", tmp);
+                        fprintf(fp, "Number of players set to %d\n", tmp);
+                    }
                 }
                 else {
-                    max_players_in_game = atoi(argv[i+1]);
-                    printf("Number of players set to %d\n", atoi(argv[i+1]));
+                    printf("Incorrect number of players\n");
+                    printf("Number of players set to %d\n", max_players_in_game);
+                    fprintf(fp, "Number of players set to %d\n", max_players_in_game);
                 }
             }
             else {
                 printf("Error: Wrong parameters\n");
+                fprintf(fp, "ERROR: Wrong parameters\n");
                 return EXIT_FAILURE;
             }
         }
@@ -136,10 +174,12 @@ int main(int argc, char *argv[]){
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
 	if (server_socket == -1) {
         printf("Error creating socket");
+        fprintf(fp, "ERROR: creating socket\n");
         return EXIT_FAILURE;
 	}
 	else {
         printf("Socket created\n");
+        fprintf(fp, "Socket created\n");
 	}
 
     // Bind socket
@@ -147,9 +187,11 @@ int main(int argc, char *argv[]){
 
     if (return_value == 0) {
         printf("Bind - OK\n");
+        fprintf(fp, "Bind OK\n");
     }
     else {
         printf("Bind - ERR\n");
+        fprintf(fp, "ERROR: bind\n");
         return EXIT_FAILURE;
     }
 
@@ -157,55 +199,30 @@ int main(int argc, char *argv[]){
     return_value = listen(server_socket, 5);
     if (return_value == 0) {
         printf("Listen - OK\n");
+        fprintf(fp, "Listen OK\n");
     } else {
         printf("Listen - ERR\n");
+        fprintf(fp, "ERROR: Listen\n");
         return EXIT_FAILURE;
     }
 
     // Create list of clients
     list_of_clients = create_client_list();
     if (!list_of_clients) {
-        printf("Error: wasn't able to create list for clients");
+        printf("Error: could not create list of clients");
+        fprintf(fp, "ERROR: could not create list of clients\n");
         return EXIT_FAILURE;
     }
 
-    // TEST Create clients
-    /*Client *new_client = create_client("Pepa", "128.9.8.2", 90);
-    add_client(list_of_clients, new_client);
-
-    Client *new_client2 = create_client("Anna", "122.9.8.2", 20);
-    add_client(list_of_clients, new_client2);
-
-    Client *new_client3 = create_client("Bum", "120.9.8.2", 10);
-    add_client(list_of_clients, new_client3);*/
-
-    // TEST Print list of clients
-    //print_client_list(list_of_clients);
-
     // Create list of games
     list_of_games = create_games(number_of_games, max_players_in_game);
-    //print_games(list_of_games, number_of_games);
+    if(!list_of_games) {
+        printf("Error: could not create list of games");
+        fprintf(fp, "ERROR: could not create list of games\n");
+        return EXIT_FAILURE;
+    }
 
-    // TEST
-    /*Game *game1 = get_game(list_of_games, number_of_games, 0);
-    game1->cards = prepare_cards();
-    print_cards(game1->cards);*/
-
-
-    /*add_player(game1, new_client);
-    add_player(game1, new_client3);
-
-    print_games(list_of_games, number_of_games);
-    print_client_list(list_of_clients);*/
-
-    // tests
-    /*Message_in *message1;
-    char client_message1[MAX_LENGTH_MESSAGE];
-    strcpy(client_message1, "G card;");
-
-    message1 = parse_in_message(client_message1);
-    print_message(message1);*/
-
+    fclose(fp);
 
     // Waiting for connections, ready to accept new client sockets
     printf("\nWaiting for connections...\n");
@@ -231,8 +248,11 @@ int main(int argc, char *argv[]){
             Client *new_client = create_client("new_client", ip_address, client_socket);
 
             pthread_create(&thread_id, NULL, (void *)&serve_request, (void *)new_client);
+
+            //pthread_join(thread_id, NULL);
+
         } else {
-            printf("Error: accept failure\n");
+            printf("Error: Accept failure\n");
             return EXIT_FAILURE;
         }
     }
@@ -260,15 +280,26 @@ void *serve_request(void *new_client){
 
     // pretypovani z netypoveho ukazate na ukazatel na Client
     Client *client = (Client *) new_client;
-    printf("(Vlakno:) Huraaa nove spojeni\n");
+    printf("(Thread:) new connection\n");
 
     //Receive a message from client
     while ((read_size = recv(client->sock_id, client_message, MAX_LENGTH_MESSAGE, 0)) > 0) {
+
+
+        // time out
+        struct timeval tv;
+        tv.tv_sec = 120;
+        tv.tv_usec = 0;
+        setsockopt(client->sock_id, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+        setsockopt(client->sock_id, SOL_SOCKET, SO_REUSEADDR, (const char*)1, sizeof(int));
+
+
         //client_message[read_size] = '\0';
-        printf("[RECEIVED]: %s\n", client_message);
+        printf("\n[RECEIVED]: %s\n", client_message);
 
         // parsovani zpravy
         message = parse_in_message(client_message);
+
         print_message(message);
 
         // if message not null, switch according to message prefix
@@ -291,24 +322,27 @@ void *serve_request(void *new_client){
 
                         // change client state
                         client->state = CLIENT_STATE_LOBBY;
-                        //print_server();
 
                         memset(server_message, 0, MAX_LENGTH_MESSAGE);
                     }
                     else {
                         printf("Error logging in.\n");
                         snprintf(server_message, MAX_LENGTH_MESSAGE, "ERROR_LOGGING_IN");
-                        //error_out_fo_state_disconnect (client, server_message);
+                        kickOut(client);
                         memset(server_message, 0, MAX_LENGTH_MESSAGE);
                     }
+
                     memset(client_message, 0, MAX_LENGTH_MESSAGE);
                     memset(server_message, 0, MAX_LENGTH_MESSAGE);
-                    if (message) free_message(message);
-                    break;
 
+                    if (message) {
+                        free_message(message);
+                    }
+                    break;
 
                     /************************************** LOBBY *************************************/
                 case LOBBY_PREFIX:
+                    printf("\nlobby\n");
                     if (client->state == CLIENT_STATE_LOBBY) {
                         if (message->number_of_arguments == 2 && strcmp(message->arguments[0], "game") == 0) {      // client zada info o game
                             int id_game = atoi(message->arguments[1]);
@@ -319,7 +353,9 @@ void *serve_request(void *new_client){
                             // if game exists
                             if(game) {
                                 // send info to client
+                                pthread_mutex_lock(&mutex);
                                 send_game_info(client->sock_id, &list_of_games, game->id_game, number_of_games);
+                                pthread_mutex_unlock(&mutex);
                             }
                             else {
                                 printf("Error: game with this id doesn't exist \n");
@@ -331,8 +367,8 @@ void *serve_request(void *new_client){
                         } else if (message->number_of_arguments == 2 && strcmp(message->arguments[0], "enter") == 0) {        // client chce vstoupit
                             int id_game = atoi(message->arguments[1]);
                             // find the correct game
-                            Game *game = get_game(list_of_games, number_of_games, atoi(message->arguments[1]));
-                            print_server();
+                            Game *game = get_game(list_of_games, number_of_games, id_game);
+                            //print_server();
                             // if game exists
                             if(game){
                                 if(game->state == GAME_STATE_NONE) {
@@ -340,21 +376,28 @@ void *serve_request(void *new_client){
                                     pthread_mutex_lock(&mutex);
                                     prepare_game(game, client, max_players_in_game);
                                     pthread_mutex_unlock(&mutex);
+                                    printf("game prepared\n");
                                 }
                                 else if (game->state == GAME_STATE_WAITING && game->number_of_players < max_players_in_game) {
+                                    printf("waiting\n");
                                     // game is waiting for players
                                     pthread_mutex_lock(&mutex);
                                     add_player(game, client, max_players_in_game);
                                     pthread_mutex_unlock(&mutex);
                                 }
+                                else if(game->state == GAME_STATE_FULL || game->state == GAME_STATE_IN_GAME || game->state == GAME_STATE_FINISHED){
+                                    printf("cant enter\n");
+                                    snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %d%c", LOBBY_PREFIX, "cant_enter", game->id_game, END_CHAR);
+                                    send_message_to_client(client->sock_id, server_message);
+                                }
 
                                 // is the game full?
                                 if (game->state == GAME_STATE_FULL && game->number_of_players == max_players_in_game){
+                                    printf("full\n");
                                     // start game
                                     pthread_mutex_lock(&mutex);
                                     start_game(game, max_players_in_game, mutex);
                                     pthread_mutex_unlock(&mutex);
-                                    printf("state: %d", client->state);
 
                                 }
                             } else {
@@ -364,17 +407,39 @@ void *serve_request(void *new_client){
                                 memset(server_message, 0, MAX_LENGTH_MESSAGE);
                             }
                         }
+                        else if(message->number_of_arguments == 1 && strcmp(message->arguments[0], "left_the_game") == 0) {
+                            printf("client left the game\n");
+                            leave_the_game(client);
+                        }
                     }
-                    else if (client->state == CLIENT_STATE_IN_GAME) {
+                    else {
+                        printf("Error: Out of state.\n");
+                        kickOut(client);
+                    }
+
+                    memset(client_message, 0, MAX_LENGTH_MESSAGE);
+                    memset(server_message, 0, MAX_LENGTH_MESSAGE);
+                    if (message) {
+                        free_message(message);
+                    }
+                    break;
+
+
+                    /************************************** GAME *************************************/
+                case GAME_PREFIX:
+                    printf("\ngame\n");
+                    printf("state: %d\n", client->state);
+                    if (client->state == CLIENT_STATE_IN_GAME) {
+
                         Game *game = get_game(list_of_games, number_of_games, client->game_id);
 
                         if (message->number_of_arguments == 1 && strcmp(message->arguments[0], "card") == 0) {
                             // give player a card
-                            pthread_mutex_lock(&mutex);
+                            printf("card \n");
                             gimme_card(game, client);
-                            pthread_mutex_unlock(&mutex);
                         }
                         else if(message->number_of_arguments == 1 && strcmp(message->arguments[0], "no_thanks") == 0) {
+                            printf("no thanks\n");
                             // player doesn't want any more cards
                             client->wants_another_card = 1;
 
@@ -383,36 +448,41 @@ void *serve_request(void *new_client){
                             game_stop_result = no_more_cards_requested(game);
                             if(game_stop_result == 1) {
                                 // game is finished
+                                pthread_mutex_lock(&mutex);
                                 game_finished(game);
+                                end_game(game);
+                                pthread_mutex_unlock(&mutex);
                             }
                         }
-                        else if (message->number_of_arguments == 1 && strcmp(message->arguments[0], "left_the_game") == 0) {
-                            printf("left");
-                            leave_the_game(client, game);
-
-                        }
-
                     }
-                    else {
-                        printf("Error: Out of state.\n");
+
+                    if (message->number_of_arguments == 1 && strcmp(message->arguments[0], "left_to_the_lobby") == 0) {
+                        Game *game = get_game(list_of_games, number_of_games, client->game_id);
+                        printf("client left to the lobby\n");
+                        client_left_the_game(client, game, max_players_in_game);
+                    }
+                    else if(message->number_of_arguments == 1 && strcmp(message->arguments[0], "left_the_game") == 0) {
+                        Game *game = get_game(list_of_games, number_of_games, client->game_id);
+                        printf("client left the game\n");
+                        pthread_mutex_lock(&mutex);
+                        client_left_the_game(client, game, max_players_in_game);
+                        leave_the_game(client);
+                        pthread_mutex_unlock(&mutex);
                     }
 
                     memset(client_message, 0, MAX_LENGTH_MESSAGE);
                     memset(server_message, 0, MAX_LENGTH_MESSAGE);
-                    if (message) free_message(message);
-                    break;
-
-
-                    /************************************** GAME *************************************/
-                case GAME_PREFIX:
-                    printf("xx");
-
-
-
+                    if (message) {
+                        free_message(message);
+                    }
                     break;
 
                 case ERROR_PREFIX:
-                    printf("err");
+                    printf("Error occured");
+                    if (message->number_of_arguments == 1) {
+                        printf("Error: %s", message->arguments[0]);
+                    }
+                    leave_the_game(client);
 
                     break;
             }
@@ -420,43 +490,57 @@ void *serve_request(void *new_client){
 
         }
         else {
-            printf("Error: BAD FORM MESSAGE - name: %s, state: %d\n", client->name, client->state);
-            //error_out_fo_state_disconnect(client, server_message);
+            printf("Error: Incorrect message \n");
+            kickOut(client);
             memset(server_message, 0, MAX_LENGTH_MESSAGE);
         }
-
-
 
 
         // makes the client message all 0
         memset(client_message, 0, MAX_LENGTH_MESSAGE);
     }
 
+    if(read_size == 0) {
+        printf("%s: Read size 0", client->name);
+        //leave_the_game(client);
+        close(client->sock_id);
+    }
+    if(read_size == -1) {
+        // time out
+        printf("%s: Read size -1", client->name);
+        leave_the_game(client);
+        close(client->sock_id);
+    }
 
+    fflush(stdout);
 
+    //free(new_client);
 
+    return 0;
+}
 
+/**
+ * Check if input is a number.
+ */
+int isANumber(char *input) {
+    int length;
 
-    // uvolnujeme pamet
-    //free(arg);
+    length = strlen (input);
+    for (int i = 0; i < length; i++)
+        if (!isdigit(input[i])) {
+            return -1;
+        }
     return 0;
 }
 
 
-
-
-
-
-
-
-
-/*
- * Print info into console how to write parameters for server
+/**
+ * Vytiskne info o tom jak spustit sever
  */
 void arg_info(){
 	printf("How to start a server\n");
 	printf("-address || -a [IPv4] : set listening address (valid IPv4), default INADDR_ANY\n");
-	printf("-port || -p [number] : set listening port (1024-65535), default 40000\n");
+	printf("-port || -p [number] : set listening port (1024-49151), default 40000\n");
     printf("-games || -g [number] : set number of games (1-20), default 5\n");
     printf("-players || -pl [number] : set max number of players is the game (2-5), default 3\n");
 	printf("Example: ./server.exe -a 127.0.0.1 -p 10000 -g 5 -pl 3\n\n");
@@ -466,48 +550,28 @@ void arg_info(){
  * Funkce, která vytiskne do konzole, na obrazovku stav her/klientů
  */
 void print_server() {
-    printf("\n-------------------------------GAME---------------------------------\n");
     printf("Games: \n");
     print_games(list_of_games, number_of_games);
     printf("Clients: \n");
     print_client_list(list_of_clients);
-    printf("--------------------------------------------------------------------\n");
-
 }
 
 
 /**
- * Funkce ze avolá pokud klient odejde ze hry
+ * Odstraneni klienta ze hry
  *
  * @param client Klient, který odeše lze hry
  */
-void leave_the_game(Client *client, Game *game) {
-    char server_message[MAX_LENGTH_MESSAGE];
-    memset(server_message, 0, MAX_LENGTH_MESSAGE);
+void leave_the_game(Client *client) {
+    printf("Client left the game entirely.\n");
+    remove_client(list_of_clients, client);
+}
 
-    Client *current;
-    if ((client->state == CLIENT_STATE_IN_GAME) == 0) {
-        printf("Client (%s) left from running game. \n", client->name);
-
-        send_message_to_client(client->sock_id, server_message);
-
-        snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %s%c", GAME_PREFIX, "player_left", client->name, END_CHAR);
-
-        // send message to all other players that player left
-        for (int i = 0; i < game->number_of_players; i++) {
-            if (game->list_of_players[i]->sock_id != client->sock_id) {
-                send_message_to_client(game->list_of_players[i]->sock_id, server_message);
-            }
-
-            client_left_the_game(client, game, list_of_clients, list_of_games, max_players_in_game);
-
-        }
-
-    } else if (client->state == CLIENT_STATE_WAITING) {
-        printf("Client (%s) left from waiting game. \n", client->name);
-        client_left_the_game(client, game, list_of_clients, list_of_games, max_players_in_game);
-
-    }
-
-
+/**
+ *  Odstraneni klienta ze hry
+ *  @param client Klient, který odeše lze hry
+ */
+void kickOut(Client *client) {
+    close(client->sock_id);
+    remove_client(list_of_clients, client);
 }

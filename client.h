@@ -1,6 +1,11 @@
-//
-// Created by terez on 1/12/2021.
-//
+/*
+ *
+ *  Semestralni prace z predmetu UPS
+ *  Autor: Tereza Tothova
+ *  Datum: 10. 12. 2020
+
+ *
+ */
 
 #ifndef SP1_CLIENT_H
 #define SP1_CLIENT_H
@@ -60,6 +65,7 @@ void print_client_list(Client_list *list);
 Client *get_client_by_name(struct Client_list *list, char name[20]);
 int set_name(Client_list *list_of_clients, Client *client, Message_in *message);
 void send_message_to_client(int sock_id, char *message);
+int remove_client(Client_list *list, Client *client);
 
 
 #endif //SP1_CLIENT_H
