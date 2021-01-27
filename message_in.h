@@ -22,7 +22,8 @@
 #define LOGIN_PREFIX 'I'    // message from login screen
 #define GAME_PREFIX 'G'     // message from game screen
 #define LOBBY_PREFIX 'L'    // message from lobby screen
-#define ERROR_PREFIX 'E'    //error message
+#define PING_PREFIX 'P'     // ping message
+#define ERROR_PREFIX 'E'    // error message
 
 typedef struct Message_in {
     char prefix;

@@ -59,6 +59,7 @@ int add_player(Game *game,  Client *client, int players_in_game) {
             if (game->number_of_players < players_in_game) {
 
                 client->game_id = game->id_game;
+                client->state = CLIENT_STATE_WAITING;
 
                 game->state = GAME_STATE_WAITING;
 

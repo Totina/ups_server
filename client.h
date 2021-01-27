@@ -38,11 +38,14 @@ typedef struct Client {
     int game_id;
 
     enum client_state state;
+    enum client_state before_disconnect_state;
 
     int number_of_cards_in_hand;
     Card *cards;
 
     int wants_another_card;     // 0 yes (default), 1 no
+
+    int ponged;                 // 0 yes, 1 no
 
     struct Client *next;
     struct Client *previous;
@@ -66,6 +69,8 @@ Client *get_client_by_name(struct Client_list *list, char name[20]);
 int set_name(Client_list *list_of_clients, Client *client, Message_in *message);
 void send_message_to_client(int sock_id, char *message);
 int remove_client(Client_list *list, Client *client);
+void ping_all_clients(Client_list *list);
+void set_ponged_to_default(Client_list *list);
 
 
 #endif //SP1_CLIENT_H

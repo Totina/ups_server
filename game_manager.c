@@ -314,25 +314,54 @@ void client_left_the_game(Client *client, Game * game, int players_in_game) {
             client->wants_another_card = 0;
             client->number_of_cards_in_hand = 0;
             client->game_id = -1;
+            game->number_of_players--;
+
+            if(game->number_of_players == 0) {
+                game->state = GAME_STATE_WAITING;
+            }
 
         }
         else if(game->state == GAME_STATE_IN_GAME || game->state == GAME_STATE_FULL) {
             printf("Player left while in game.\n");
 
+            client->state = CLIENT_STATE_LOBBY;
+            client->wants_another_card = 0;
+            client->number_of_cards_in_hand = 0;
+            client->game_id = -1;
+
             // send message to all other players that player left the game
             for (int i = 0; i < game->number_of_players; i++) {
-                if (game->list_of_players[i]->sock_id != client->sock_id) {
+                if (game->list_of_players[i]->sock_id != client->sock_id && game->list_of_players[i]->state != CLIENT_STATE_DISCONNECTED) {
                     send_message_to_client(game->list_of_players[i]->sock_id, server_message);
                 }
             }
 
             // 1 or 2 players
-            if(players_in_game < 3) {
+            if(players_in_game < 3 || game->number_of_players < 3) {
+
+                // player was alone
+                if(game->number_of_players == 1) {
+                    game->state = GAME_STATE_WAITING;
+                }
+                // the second player was disconnected
+                else if(game->list_of_players[0]->state == CLIENT_STATE_DISCONNECTED ||
+                game->list_of_players[1]->state == CLIENT_STATE_DISCONNECTED) {
+                    game->state = GAME_STATE_WAITING;
+                    //game->number_of_players--;
+                }
+                // the second player is still there
+                else {
+                    game->state = GAME_STATE_FINISHED;
+                }
+
                 end_game(game);
+                //printf("Ending the game\n");
+                game->number_of_players--;
+
+
             }
             else {
                 // more than 2 players can continue playing
-                client->state = CLIENT_STATE_LOBBY;
 
                 for (int i = 0; i < game->number_of_players; i++) {
                     if (game->list_of_players[i]->name == client->name) {
@@ -345,7 +374,7 @@ void client_left_the_game(Client *client, Game * game, int players_in_game) {
                         }
                     }
                 }
-
+                game->number_of_players--;
             }
 
         }
@@ -360,6 +389,9 @@ void client_left_the_game(Client *client, Game * game, int players_in_game) {
             }
 
             client->state = CLIENT_STATE_LOBBY;
+            client->wants_another_card = 0;
+            client->number_of_cards_in_hand = 0;
+            client->game_id = -1;
 
             for (int i = 0; i < game->number_of_players; i++) {
                 if (game->list_of_players[i]->name == client->name) {
@@ -394,28 +426,275 @@ void end_game(Game *game) {
     char server_message[MAX_LENGTH_MESSAGE];
     memset(server_message, 0, MAX_LENGTH_MESSAGE);
 
-    printf("ending the game\n");
+    printf("Ending the game\n");
 
     // clients
     for (int i = 0; i < game->number_of_players; i++) {
-        if (game->list_of_players[i]->state != CLIENT_STATE_DISCONNECTED) {
-            game->list_of_players[i]->state = CLIENT_STATE_LOBBY;
-            game->list_of_players[i]->game_id = -1;
+        //if (game->list_of_players[i]->state != CLIENT_STATE_DISCONNECTED) {
+            //game->list_of_players[i]->state = CLIENT_STATE_LOBBY;
+            //game->list_of_players[i]->game_id = -1;
             game->list_of_players[i]->number_of_cards_in_hand = 0;
             game->list_of_players[i]->wants_another_card = 0;
-            game->list_of_players[i] = NULL;
+
+        if(game->list_of_players[i]->state == CLIENT_STATE_DISCONNECTED) {
+            game->list_of_players[i]->state = CLIENT_STATE_LOBBY;
+            game->list_of_players[i]->game_id = -1;
+            game->number_of_players--;
         }
+
+            game->list_of_players[i] = NULL;
+        //}
+
+
     }
 
     free(game->cards);
     //free_cards();
 
-    game->number_of_players = 0;
+    //game->number_of_players = 0;
     game->index_of_the_card = 0;
-    game->state = GAME_STATE_WAITING;
+    //game->state = GAME_STATE_WAITING;
 
     //free_just_client_in_list(client->my_game->list_of_players);
 
-    printf("game ended \n");
+    printf("Game ended \n");
 
+}
+
+/**
+ * Set client as disconnected and adjust games accordingly.
+ * Client leaves in lobby - reconnects to lobby
+ * Client leaves after the game was finished - reconnects to the lobby
+ * Client leaves waiting for players - reconnects to the lobby
+ *
+ * Client leaves when the game is running - reconnects to the game
+ *
+ * @param list
+ */
+void set_disconnected(Client *client, Game *game) {
+    char server_message[MAX_LENGTH_MESSAGE];
+    memset(server_message, 0, MAX_LENGTH_MESSAGE);
+
+    // message - player left
+    snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %s%c", GAME_PREFIX, "player_left", client->name, END_CHAR);
+
+    if (client) {
+        printf("Setting disconnected to the client: %s\n", client->name);
+
+        // client in the lobby when disconnected
+        if(client->state == CLIENT_STATE_LOBBY) {
+            printf("Player disconnected from the lobby.\n");
+            client->before_disconnect_state = client->state;
+            client->state = CLIENT_STATE_DISCONNECTED;
+            return;
+        }
+
+        // if game exists
+        if(game) {
+            printf("Player disconnected from the game. State: %d\n", game->state);
+
+            // game was finished
+            if(game->state == GAME_STATE_FINISHED) {
+                printf("Player disconnected after the game was finished.\n");
+
+                client->before_disconnect_state = CLIENT_STATE_LOBBY;
+                client->state = CLIENT_STATE_DISCONNECTED;
+                client->wants_another_card = 0;
+                client->number_of_cards_in_hand = 0;
+                client->game_id = -1;
+                game->number_of_players--;
+
+                if(game->number_of_players == 0) {
+                    game->state = GAME_STATE_WAITING;
+                }
+            }
+            // game was waiting for players
+            else if(game->state == GAME_STATE_WAITING) {
+                printf("Player disconnected from the game waiting for players.\n");
+
+                // send message to all other players that player left the game
+                for (int i = 0; i < game->number_of_players; i++) {
+                    if (game->list_of_players[i]->sock_id != client->sock_id && game->list_of_players[i]->state != CLIENT_STATE_DISCONNECTED) {
+                        send_message_to_client(game->list_of_players[i]->sock_id, server_message);
+                    }
+                }
+
+                client->before_disconnect_state = CLIENT_STATE_LOBBY;
+                client->state = CLIENT_STATE_DISCONNECTED;
+                client->wants_another_card = 0;
+                client->number_of_cards_in_hand = 0;
+                client->game_id = -1;
+
+                for (int i = 0; i < game->number_of_players; i++) {
+                    if (game->list_of_players[i]->name == client->name) {
+                        game->list_of_players[i] = NULL;
+
+                        for(int j = 0; j < game->number_of_players - i - 1; j++) {
+                            if(game->list_of_players[i+1]) {
+                                game->list_of_players[i] = game->list_of_players[i+1];
+                            }
+                        }
+                    }
+                }
+
+                game->number_of_players--;
+
+            }
+            // game is running
+            else if(game->state == GAME_STATE_IN_GAME) {
+                printf("Player disconnected from the running game.\n");
+
+                // message - player disconnected
+                snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %s%c", GAME_PREFIX, "player_disconnected", client->name, END_CHAR);
+
+                // send message to all the other players that player disconnected
+                for (int i = 0; i < game->number_of_players; i++) {
+                    if (game->list_of_players[i]->sock_id != client->sock_id && game->list_of_players[i]->state != CLIENT_STATE_DISCONNECTED) {
+                        send_message_to_client(game->list_of_players[i]->sock_id, server_message);
+                    }
+                }
+
+                client->before_disconnect_state = CLIENT_STATE_IN_GAME;
+                client->state = CLIENT_STATE_DISCONNECTED;
+
+            }
+
+        }
+        else {
+            printf("Error: setting disconnected, game is NULL\n");
+        }
+
+
+    } else {
+        printf("Error: setting disconnected, client is NULL\n");
+    }
+
+}
+
+/**
+ *
+ *
+ * @param list
+ * @param client
+ * @param message
+ * @param number_of_games
+ * @return
+ */
+int is_there_disconnected_client(Client_list *list, Client *client, Game **list_of_games, Message_in *message, int number_of_games,
+        int players_in_game) {
+
+    char server_message[MAX_LENGTH_MESSAGE];
+    memset(server_message, 0, MAX_LENGTH_MESSAGE);
+
+    Client *tmp;
+
+    // name
+    char * name;
+    name = message->arguments[0];
+    int length = strlen(name);
+
+    // get disconnected client with the same name
+    tmp = get_client_by_name(list, name);
+    if(tmp != NULL && tmp->state == CLIENT_STATE_DISCONNECTED) {
+        printf("Found disconnected client with the same name: %s\n", tmp->name);
+
+        // set name and add client to the list
+        strcpy(client->name, name);
+        add_client(list, client);
+
+        // logged in message
+        snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %s%c", LOGIN_PREFIX, "logged_in", client->name, END_CHAR);
+        send_message_to_client(client->sock_id, server_message);
+
+        // sending message about number of games
+        snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %d%c", LOBBY_PREFIX,
+                 "number_of_games", number_of_games, END_CHAR);
+        send_message_to_client(client->sock_id, server_message);
+
+        // client was in lobby
+        if(tmp->before_disconnect_state == CLIENT_STATE_LOBBY) {
+            printf("Client was in lobby when he disconnected\n");
+            client->state = CLIENT_STATE_LOBBY;
+        }
+        // client was in game
+        else if(tmp->game_id != -1 && tmp->before_disconnect_state == CLIENT_STATE_IN_GAME){
+            printf("Client was playing when he disconnected\n");
+
+            // get game he disconnected from
+            Game *game = get_game(*list_of_games, number_of_games, tmp->game_id);
+
+
+            // set state and game_id
+            client->game_id = tmp->game_id;
+            client->state = CLIENT_STATE_IN_GAME;
+
+            // message entered
+            snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %d %d%c", LOBBY_PREFIX, "entered", client->game_id, players_in_game, END_CHAR);
+            send_message_to_client(client->sock_id, server_message);
+
+            // message started
+            snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s%c", GAME_PREFIX, "game_started", END_CHAR);
+            send_message_to_client(client->sock_id, server_message);
+
+            // set cards
+            client->number_of_cards_in_hand = tmp->number_of_cards_in_hand;
+            client->wants_another_card = tmp->wants_another_card;
+
+            for(int i = 0; i < client->number_of_cards_in_hand; i++) {
+                client->cards[i] = tmp->cards[i];
+            }
+
+            // add player to the game
+            for(int i = 0; i < game->number_of_players; i++) {
+                printf("Looking to add player\n");
+                if(strcmp(game->list_of_players[i]->name, name) == 0) {
+                    printf("found place for the player\n");
+                    game->list_of_players[i] = client;
+                }
+            }
+
+            // message players
+            for(int j = 0; j < game->number_of_players; j++) {
+                snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %s%c", GAME_PREFIX, "player",
+                         game->list_of_players[j]->name, END_CHAR);
+                send_message_to_client(client->sock_id, server_message);
+            }
+
+            // message cards
+            for(int i = 0; i < client->number_of_cards_in_hand; i++) {
+                // message - G card name value pattern
+                snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %s %d %d%c", GAME_PREFIX, "card", client->cards[i].name,
+                         client->cards[i].value, client->cards[i].pattern, END_CHAR);
+                send_message_to_client(client->sock_id, server_message);
+            }
+
+            // message for others, that he is back
+            snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %s%c", GAME_PREFIX, "player_reconnected",
+                     client->name, END_CHAR);
+
+            for (int i = 0; i < game->number_of_players; i++) {
+                if (game->list_of_players[i]->sock_id != client->sock_id && game->list_of_players[i]->state != CLIENT_STATE_DISCONNECTED) {
+                    send_message_to_client(game->list_of_players[i]->sock_id, server_message);
+                }
+            }
+
+        }
+
+
+    }
+    else {
+        return EXIT_FAILURE;
+    }
+
+
+
+
+
+    //free(tmp);
+    close(tmp->sock_id);
+    remove_client(list, tmp);
+
+    memset(server_message, 0, MAX_LENGTH_MESSAGE);
+
+    return EXIT_SUCCESS;
 }

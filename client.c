@@ -57,12 +57,15 @@ Client *create_client(char name[20], char ip[20], int sock_id) {
         newClient->game_id = -1;
 
         newClient->state = CLIENT_STATE_LOGIN;
+        newClient->before_disconnect_state = CLIENT_STATE_LOGIN;
 
         newClient->number_of_cards_in_hand = 0;
         Card *cards = (Card*)malloc(MAX_CARDS_IN_HAND * sizeof(Card));
         newClient->cards = cards;
 
         newClient->wants_another_card = 0;  // yes
+
+        newClient->ponged = 0;  // no
 
         newClient->next = NULL;
         newClient->previous = NULL;
@@ -107,7 +110,13 @@ void print_client(Client *client) {
         printf("	%s", client->name);
         printf("(ip: %s) ", client->client_ip);
         printf("(game_id: %d) ", client->game_id);
-        printf("(state: %d)\n", client->state);
+        printf("(sock_id: %d)", client->sock_id);
+        printf("(number of cards: %d)", client->number_of_cards_in_hand);
+        printf("(wants another card: %d)", client->wants_another_card);
+        printf("(state: %d) ", client->state);
+        printf("(ponged: %d)\n", client->ponged);
+        print_cards(client->cards, client->number_of_cards_in_hand);
+
     } else {
         printf("Error printing client)\n");
     }
@@ -120,6 +129,8 @@ void print_client(Client *client) {
  */
 void print_client_list(Client_list *list) {
     if (list) {
+        printf("(%d)", list->size);
+
         Client *tmp = list->first;
         while (tmp) {
             print_client(tmp);
@@ -229,7 +240,7 @@ int remove_client(Client_list *list, Client *client) {
 
     if(client && list) {
 
-        printf("Deleting client");
+        printf("Deleting client %s\n", client->name);
 
         // first in the list
         if(client == list->first) {
@@ -281,3 +292,49 @@ void send_message_to_client(int sock_id, char *message) {
 
     memset(send_message, 0, MAX_LENGTH_MESSAGE);
 }
+
+/**
+ * Send ping message to all clients in the list.
+ *
+ * @param list
+ */
+void ping_all_clients(Client_list *list) {
+    char server_message[MAX_LENGTH_MESSAGE];
+    memset(server_message, 0, MAX_LENGTH_MESSAGE);
+
+    snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s%c", PING_PREFIX, "ping", END_CHAR);
+
+    if (list && list->first) {
+        Client *tmp = list->first;
+        while (tmp) {
+            if(tmp->state != CLIENT_STATE_DISCONNECTED) {
+                send_message_to_client(tmp->sock_id, server_message);
+                printf("Sending ping to %s\n", tmp->name);
+            }
+            tmp = tmp->next;
+        }
+    } else {
+        printf("Error: pinging\n");
+    }
+
+}
+
+/**
+ * Set ponged of every client on the list to 1 (no)
+ *
+ * @param list
+ */
+void set_ponged_to_default(Client_list *list) {
+
+    if (list && list->first) {
+        Client *tmp = list->first;
+        while (tmp) {
+            tmp->ponged = 1;
+            tmp = tmp->next;
+        }
+    } else {
+        printf("Error: setting ponged to default\n");
+    }
+
+}
+

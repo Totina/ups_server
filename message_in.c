@@ -99,7 +99,7 @@ int split_message(char *message, char **array) {
     int i = 1;      // první znak je prefix
 
     if (message[i] != ' ' && message[i] != END_CHAR) {
-        printf("ERROR: [Split message] in the %d. Incorrect message. \n", i);
+        printf("ERROR: [Split message] in the %d. char should be space. Incorrect message. \n", i);
         return -1;
     }
 
@@ -109,7 +109,7 @@ int split_message(char *message, char **array) {
             return -1;
         }
 
-        if (n > MAX_ARGUMENTS) {
+        if (n > MAX_ARGUMENTS - 1) {
             printf("Error: [Split message] too many arguments in message \n");
             return -1;
         }
@@ -127,9 +127,9 @@ int split_message(char *message, char **array) {
                 return -1;
             }
         } else {
-            //konec slova
+            // konec slova
             if (j != 0) {
-                array[n][j] = '\0'; //insert NULL
+                array[n][j] = '\0';     //insert NULL
                 n++;
                 j = 0;
             }
@@ -139,13 +139,13 @@ int split_message(char *message, char **array) {
 
 
     if (j != 0) {
-        array[n][j++] = '\0'; //insert NULL
+        array[n][j++] = '\0';   //insert NULL
     }
 
     if (n == 0 && j == 0) {
-        return 0; //pocet-slov
+        return 0;
     } else {
-        return (n + 1); //pocet slov - 0 je index
+        return (n + 1);
     }
 }
 
@@ -166,6 +166,8 @@ int is_prefix_correct(char prefix) {
             return EXIT_SUCCESS;
         case 'E':
             return EXIT_SUCCESS;
+        case 'P':
+            return EXIT_SUCCESS;
         default:
             return EXIT_FAILURE;
     }
@@ -182,6 +184,7 @@ void print_message(Message_in *message) {
     for (int i = 0; i < message->number_of_arguments; i++) {
             printf("'%s', ", message->arguments[i]);
     }
+    printf("\n");
 }
 
 /**

@@ -26,6 +26,6 @@ typedef struct Card {
 } Card;
 
 Card *prepare_cards();
-void print_cards(Card *cards);
+void print_cards(Card *cards, int number_of_cards);
 
 #endif //SP1_CARDS_H

@@ -107,12 +107,12 @@ Card *prepare_cards(){
  *
  * @param cards karty
  */
-void print_cards(Card *cards) {
+void print_cards(Card *cards, int number_of_cards) {
 
-    for(int i = 0; i < NUMBER_OF_CARDS; i++) {
+    for(int i = 0; i < number_of_cards; i++) {
         printf("Card ");
         printf("name: %s ", cards[i].name);
-        printf("value:%d ", cards[i].value);
+        printf("value: %d ", cards[i].value);
         printf("pattern: %d\n", cards[i].pattern);
     }
 
