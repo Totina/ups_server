@@ -201,16 +201,17 @@ int set_name(Client_list *list_of_clients, Client *client, Message_in *message) 
             name[length+1] = '\0';
         }
 
-        // name already exists, add 1
+        // name already exists
         if(get_client_by_name(list_of_clients, name) != NULL) {
-            if(length == MAX_NAME_LENGTH) {
+            return EXIT_FAILURE;
+            /*if(length == MAX_NAME_LENGTH) {
                 name[length-1] = '1';
                 name[length] = '\0';
             }
             else {
                 name[length] = '1';
                 name[length+1] = '\0';
-            }
+            }*/
         }
 
         // name is OK

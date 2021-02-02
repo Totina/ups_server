@@ -367,38 +367,50 @@ void *serve_request(void *new_client){
                 case LOGIN_PREFIX:
                     printf("\n");
 
-                    // is player reconnecting?
-                    int reconnecting;
-                    reconnecting = is_there_disconnected_client(list_of_clients, client, &list_of_games, message,
-                                                                number_of_games, max_players_in_game);
 
-                    if(reconnecting == 0) {
-                        printf("Reconnected client.");
-                    }
-                    else {
-                        // STANDARD LOGIN
-                        // setting a name
-                        int result = set_name(list_of_clients, client, message);
-                        if (result == EXIT_SUCCESS) {
-                            // adding client to the list of clients
-                            add_client(list_of_clients, client);
+                    if (client->state == CLIENT_STATE_LOGIN) {
 
-                            // sending message about number of games to client
-                            snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %d%c", LOBBY_PREFIX,
-                                     "number_of_games", number_of_games, END_CHAR);
-                            send_message_to_client(client->sock_id, server_message);
+                        // is player reconnecting?
+                        int reconnecting;
+                        reconnecting = is_there_disconnected_client(list_of_clients, client, &list_of_games, message,
+                                                                    number_of_games, max_players_in_game);
 
-                            // change client state
-                            client->state = CLIENT_STATE_LOBBY;
-
-                            memset(server_message, 0, MAX_LENGTH_MESSAGE);
+                        if(reconnecting == 0) {
+                            printf("Reconnected client.");
                         }
                         else {
-                            printf("Error logging in.\n");
-                            snprintf(server_message, MAX_LENGTH_MESSAGE, "ERROR_LOGGING_IN");
-                            kickOut(client);
-                            memset(server_message, 0, MAX_LENGTH_MESSAGE);
+                            // STANDARD LOGIN
+                            // setting a name
+                            int result = set_name(list_of_clients, client, message);
+                            if (result == EXIT_SUCCESS) {
+                                // adding client to the list of clients
+                                add_client(list_of_clients, client);
+
+                                // sending message about number of games to client
+                                snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s %d%c", LOBBY_PREFIX,
+                                         "number_of_games", number_of_games, END_CHAR);
+                                send_message_to_client(client->sock_id, server_message);
+
+                                // change client state
+                                client->state = CLIENT_STATE_LOBBY;
+
+                                memset(server_message, 0, MAX_LENGTH_MESSAGE);
+                            }
+                            else {
+                                printf("Error logging in.\n");
+
+                                snprintf(server_message, MAX_LENGTH_MESSAGE, "%c %s%c", ERROR_PREFIX,
+                                         "error_logging_in", END_CHAR);
+                                send_message_to_client(client->sock_id, server_message);
+                                close(client->sock_id);
+                                memset(server_message, 0, MAX_LENGTH_MESSAGE);
+                            }
                         }
+
+                    }
+                    else {
+                        printf("Error: Out of state.\n");
+                        kickOut(client);
                     }
 
                     memset(client_message, 0, MAX_LENGTH_MESSAGE);
